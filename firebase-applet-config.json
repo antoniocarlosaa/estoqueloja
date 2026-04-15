@@ -1,10 +1,10 @@
 {
-  "projectId": "appestoque-75f3d",
-  "appId": "1:955301256523:web:3cd43e1d102fa4aa291cce",
-  "apiKey": "AIzaSyCg0uJthSKcBJjWIz4pliSFT6gpSoApAN8",
-  "authDomain": "appestoque-75f3d.firebaseapp.com",
+  "projectId": "appestoque-75f2d",
+  "appId": "1:955301256523:web:3cd41e1d182fb4aa091cce",
+  "apiKey": "AIzaSyCg0uJthsKe8UjWIz4p1jSFT6gpSoApAM0",
+  "authDomain": "appestoque-75f2d.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
-  "storageBucket": "appestoque-75f3d.firebasestorage.app",
+  "storageBucket": "appestoque-75f2d.firebasestorage.app",
   "messagingSenderId": "955301256523",
   "measurementId": ""
 }
