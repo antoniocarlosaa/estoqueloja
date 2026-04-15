@@ -753,33 +753,17 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
 
 const InventoryPage = ({ products, user }: { products: Product[], user: User }) => {
   const [filter, setFilter] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', vehicleModel: '', category: 'Peças', unitValue: '' });
-  const [loading, setLoading] = useState(false);
   
-  const filteredProducts = products.filter(p => 
+  // O inventário mostra apenas o que tem quantidade física real para conferência
+  const productsWithStock = products.filter(p => p.stock > 0);
+
+  const filteredProducts = productsWithStock.filter(p => 
     p.name.toLowerCase().includes(filter.toLowerCase()) || 
     (p.vehicleModel || '').toLowerCase().includes(filter.toLowerCase())
   );
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await addDoc(collection(db, 'products'), {
-        ...newProduct,
-        stock: 0,
-        unitValue: Number(newProduct.unitValue),
-        lastUpdated: new Date().toISOString()
-      });
-      setShowAddModal(false);
-      setNewProduct({ name: '', vehicleModel: '', category: 'Peças', unitValue: '' });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'products');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalItems = productsWithStock.reduce((acc, p) => acc + p.stock, 0);
+  const totalValue = productsWithStock.reduce((acc, p) => acc + (p.stock * p.unitValue), 0);
 
   return (
     <motion.div 
@@ -790,14 +774,19 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
       <div className="flex justify-between items-end">
         <div className="space-y-1">
           <span className="text-on-surface-variant font-bold text-[11px] uppercase tracking-widest">Controle Geral</span>
-          <h2 className="text-4xl font-black tracking-tighter text-on-surface">Inventário</h2>
+          <h2 className="text-4xl font-black tracking-tighter text-on-surface">Conferência de Estoque</h2>
         </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-primary text-on-primary p-3 rounded-2xl shadow-lg shadow-primary/20 active:scale-95 transition-transform"
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-surface-container-lowest p-5 rounded-3xl flex flex-col justify-between shadow-sm border border-outline-variant/10">
+          <p className="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest mb-1">Total de Peças Físicas</p>
+          <p className="text-primary text-3xl font-black tracking-tight">{totalItems} <span className="text-base font-bold">UN</span></p>
+        </div>
+        <div className="bg-surface-container-lowest p-5 rounded-3xl flex flex-col justify-between shadow-sm border border-outline-variant/10">
+          <p className="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest mb-1">Valor Estimado em Estoque</p>
+          <p className="text-secondary text-2xl font-black tracking-tight">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        </div>
       </div>
 
       <div className="relative">
@@ -827,78 +816,22 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
                 <h3 className="text-lg font-bold text-on-surface leading-tight mt-1">{product.name}</h3>
               </div>
               <div className="flex justify-between items-end mt-2">
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                  product.stock > 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-error-container text-on-error-container'
-                }`}>
+                <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-secondary-container text-on-secondary-container">
                   {product.stock} em estoque
                 </span>
-                <span className="text-xs font-bold text-outline">R$ {product.unitValue.toLocaleString('pt-BR')}</span>
+                <span className="text-xs font-bold text-outline">Total: R$ {(product.unitValue * product.stock).toLocaleString('pt-BR')}</span>
               </div>
             </div>
           </div>
         ))}
-      </div>
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-sm">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-surface-container-lowest p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full border border-outline-variant/10"
-          >
-            <h3 className="text-2xl font-black tracking-tight mb-6">Novo Produto</h3>
-            <form onSubmit={handleAddProduct} className="space-y-4">
-              <input 
-                placeholder="Nome da Peça/Produto"
-                value={newProduct.name}
-                onChange={e => setNewProduct({...newProduct, name: e.target.value})}
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
-                required
-              />
-              <input 
-                placeholder="Para qual veículo/modelo?"
-                value={newProduct.vehicleModel}
-                onChange={e => setNewProduct({...newProduct, vehicleModel: e.target.value})}
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
-                required
-              />
-              <select 
-                value={newProduct.category}
-                onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
-              >
-                <option value="Peças">Peças</option>
-                <option value="Acessórios">Acessórios</option>
-              </select>
-              <input 
-                placeholder="Valor Unitário Base (R$)"
-                type="number"
-                step="0.01"
-                value={newProduct.unitValue}
-                onChange={e => setNewProduct({...newProduct, unitValue: e.target.value})}
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
-                required
-              />
-              <div className="flex gap-3 pt-4">
-                <button 
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 bg-surface-container-high text-on-surface font-bold py-4 rounded-2xl"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-primary text-on-primary font-bold py-4 rounded-2xl shadow-lg shadow-primary/20"
-                >
-                  {loading ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
+        {filteredProducts.length === 0 && (
+          <div className="text-center py-10 opacity-50">
+            <span className="material-symbols-outlined text-4xl mb-2">search_off</span>
+            <p className="font-bold text-sm">Nenhum produto com estoque encontrado.</p>
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 };
