@@ -365,7 +365,9 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
   const [newProductName, setNewProductName] = useState('');
   const [newProductVehicle, setNewProductVehicle] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [totalValue, setTotalValue] = useState('');
+  const [unitValue, setUnitValue] = useState('');
+  
+  const calculatedTotal = quantity * (Number(unitValue) || 0);
   
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -376,7 +378,7 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
     setNewProductName('');
     setNewProductVehicle('');
     setQuantity(1);
-    setTotalValue('');
+    setUnitValue('');
   };
 
   const handleAddItemToInvoice = () => {
@@ -399,7 +401,8 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
       newProductName,
       newProductVehicle,
       quantity: Number(quantity),
-      totalValue: Number(totalValue) || 0,
+      unitValue: Number(unitValue) || 0,
+      totalValue: calculatedTotal,
       displayName
     }]);
 
@@ -408,6 +411,19 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
+  };
+
+  const handleEditItem = (id: string) => {
+    const itemToEdit = items.find(i => i.id === id);
+    if (itemToEdit) {
+      setIsNewProduct(itemToEdit.isNewProduct);
+      setSelectedProduct(itemToEdit.selectedProduct);
+      setNewProductName(itemToEdit.newProductName);
+      setNewProductVehicle(itemToEdit.newProductVehicle);
+      setQuantity(itemToEdit.quantity);
+      setUnitValue(String(itemToEdit.unitValue));
+      removeItem(id);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -425,7 +441,8 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
         newProductName,
         newProductVehicle,
         quantity: Number(quantity),
-        totalValue: Number(totalValue) || 0
+        unitValue: Number(unitValue) || 0,
+        totalValue: calculatedTotal
       }];
     } else {
       if (items.length === 0) { setLoading(false); return; }
@@ -445,7 +462,7 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
             vehicleModel: item.newProductVehicle,
             category: finalCategory,
             stock: item.quantity,
-            unitValue: (item.totalValue / item.quantity) || 0,
+            unitValue: item.unitValue !== undefined ? item.unitValue : ((item.totalValue / item.quantity) || 0),
             lastUpdated: new Date().toISOString()
           };
           const productRef = await addDoc(collection(db, 'products'), newProductData);
@@ -598,9 +615,14 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
                 <input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Pego (R$)</label>
-                <input type="number" step="0.01" value={totalValue} onChange={(e) => setTotalValue(e.target.value)} placeholder="0,00" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor de Unid. (R$)</label>
+                <input type="number" step="0.01" value={unitValue} onChange={(e) => setUnitValue(e.target.value)} placeholder="0,00" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
               </div>
+            </div>
+
+            <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 flex justify-between items-center">
+              <span className="font-bold text-sm text-on-surface-variant">Valor Total do Produto:</span>
+              <span className="font-black text-lg text-primary">R$ {calculatedTotal.toFixed(2)}</span>
             </div>
 
             {mode === 'invoice' && (
@@ -622,11 +644,16 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
                 <div key={item.id} className="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between border border-outline-variant/5">
                   <div>
                     <h4 className="font-bold text-sm">{item.displayName}</h4>
-                    <p className="text-xs text-on-surface-variant">{item.quantity} unidades | R$ {item.totalValue.toFixed(2)}</p>
+                    <p className="text-xs text-on-surface-variant">{item.quantity} un x R$ {(item.unitValue || 0).toFixed(2)} | Total: R$ {item.totalValue.toFixed(2)}</p>
                   </div>
-                  <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-error hover:bg-error/10 rounded-xl transition-colors">
-                    <span className="material-symbols-outlined text-xl">delete</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => handleEditItem(item.id)} className="p-2 text-primary hover:bg-primary/10 rounded-xl transition-colors">
+                      <span className="material-symbols-outlined text-xl">edit</span>
+                    </button>
+                    <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-error hover:bg-error/10 rounded-xl transition-colors">
+                      <span className="material-symbols-outlined text-xl">delete</span>
+                    </button>
+                  </div>
                 </div>
               ))}
               {items.length === 0 && <p className="text-sm text-on-surface-variant text-center my-4">Nenhum produto adicionado à nota ainda.</p>}
