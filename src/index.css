@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-surface: #f7f9ff;
+  --color-on-surface: #091d2e;
+  --color-surface-container: #e3efff;
+  --color-surface-container-low: #edf4ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #d9eaff;
+  --color-surface-container-highest: #d1e4fb;
+  --color-on-surface-variant: #424750;
+  --color-primary: #003461;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #004b87;
+  --color-on-primary-container: #8abcff;
+  --color-secondary: #006d43;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #75f8b3;
+  --color-on-secondary-container: #007147;
+  --color-tertiary: #542700;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-fixed: #ffdcc5;
+  --color-tertiary-fixed-dim: #ffb783;
+  --color-on-tertiary-fixed-variant: #713700;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-outline: #727781;
+  --color-outline-variant: #c2c6d1;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface;
+  }
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A product in the inventory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the product." },
+        "name": { "type": "string", "description": "Name of the product." },
+        "sku": { "type": "string", "description": "Stock Keeping Unit." },
+        "category": { "type": "string", "description": "Category of the product (e.g., Peças, Veículos)." },
+        "stock": { "type": "number", "description": "Current stock quantity." },
+        "unitValue": { "type": "number", "description": "Value per unit." },
+        "imageUrl": { "type": "string", "description": "URL of the product image." },
+        "lastUpdated": { "type": "string", "format": "date-time", "description": "Timestamp of the last update." }
+      },
+      "required": ["name", "sku", "category", "stock", "unitValue"]
+    },
+    "Entry": {
+      "title": "Stock Entry",
+      "description": "A record of items added to stock.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "Reference to the product." },
+        "productName": { "type": "string", "description": "Name of the product at the time of entry." },
+        "category": { "type": "string", "description": "Category of the product." },
+        "quantity": { "type": "number", "description": "Quantity added." },
+        "unitValue": { "type": "number", "description": "Unit value at the time of entry." },
+        "date": { "type": "string", "format": "date-time", "description": "Date of entry." },
+        "authorUid": { "type": "string", "description": "UID of the user who registered the entry." }
+      },
+      "required": ["productId", "quantity", "unitValue", "date", "authorUid"]
+    },
+    "Exit": {
+      "title": "Stock Exit",
+      "description": "A record of items removed from stock.",
+      "type": "object",
+      "properties": {
+        "recipient": { "type": "string", "description": "Who received the items." },
+        "vehicle": { "type": "string", "description": "Vehicle used for transport." },
+        "date": { "type": "string", "format": "date-time", "description": "Date of exit." },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": { "type": "string" },
+              "productName": { "type": "string" },
+              "quantity": { "type": "number" },
+              "sku": { "type": "string" }
+            }
+          }
+        },
+        "totalVolumes": { "type": "number" },
+        "estimatedWeight": { "type": "number" },
+        "authorUid": { "type": "string", "description": "UID of the user who registered the exit." }
+      },
+      "required": ["recipient", "date", "items", "authorUid"]
+    }
+  },
+  "firestore": {
+    "/products": { "schema": "Product", "description": "Collection of products." },
+    "/entries": { "schema": "Entry", "description": "Collection of stock entries." },
+    "/exits": { "schema": "Exit", "description": "Collection of stock exits." }
+  }
+}
