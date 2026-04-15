@@ -823,6 +823,8 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
 
 const InventoryPage = ({ products, user }: { products: Product[], user: User }) => {
   const [filter, setFilter] = useState('');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(false);
   
   // O inventário mostra apenas o que tem quantidade física real para conferência
   const productsWithStock = products.filter(p => p.stock > 0);
@@ -834,6 +836,27 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
 
   const totalItems = productsWithStock.reduce((acc, p) => acc + p.stock, 0);
   const totalValue = productsWithStock.reduce((acc, p) => acc + (p.stock * p.unitValue), 0);
+
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setLoading(true);
+    try {
+      const productRef = doc(db, 'products', editingProduct.id);
+      await updateDoc(productRef, {
+        name: editingProduct.name,
+        vehicleModel: editingProduct.vehicleModel,
+        stock: Number(editingProduct.stock),
+        unitValue: Number(editingProduct.unitValue),
+        lastUpdated: new Date().toISOString()
+      });
+      setEditingProduct(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'products');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div 
@@ -872,7 +895,13 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
 
       <div className="grid grid-cols-1 gap-4">
         {filteredProducts.map(product => (
-          <div key={product.id} className="bg-surface-container-lowest rounded-3xl p-5 border border-outline-variant/10 shadow-sm flex gap-5">
+          <div key={product.id} className="bg-surface-container-lowest rounded-3xl p-5 border border-outline-variant/10 shadow-sm flex gap-5 relative group">
+            <button 
+              onClick={() => setEditingProduct(product)}
+              className="absolute top-4 right-4 text-outline/50 hover:text-primary transition-colors focus:outline-none"
+            >
+              <span className="material-symbols-outlined text-xl">edit</span>
+            </button>
             <div className="w-20 h-20 rounded-2xl bg-surface-container overflow-hidden flex-shrink-0 flex items-center justify-center">
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -880,7 +909,7 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
                 <span className="material-symbols-outlined text-primary/30 text-4xl">inventory_2</span>
               )}
             </div>
-            <div className="flex flex-col justify-between py-1 flex-grow">
+            <div className="flex flex-col justify-between py-1 flex-grow pr-8">
               <div>
                 <span className="text-[10px] font-bold text-secondary tracking-widest uppercase">{product.vehicleModel}</span>
                 <h3 className="text-lg font-bold text-on-surface leading-tight mt-1">{product.name}</h3>
@@ -902,6 +931,75 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
           </div>
         )}
       </div>
+
+      {editingProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-sm">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-surface-container-lowest p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full border border-outline-variant/10"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-black tracking-tight">Editar Peça</h3>
+              <button onClick={() => setEditingProduct(null)} className="p-2 -mr-2 text-outline hover:text-on-surface hover:bg-surface-container rounded-full transition-colors focus:outline-none">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateProduct} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Nome do Produto</label>
+                <input 
+                  value={editingProduct.name}
+                  onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
+                  className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Veículo / Modelo</label>
+                <input 
+                  value={editingProduct.vehicleModel}
+                  onChange={e => setEditingProduct({...editingProduct, vehicleModel: e.target.value})}
+                  className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">QTD Estoque</label>
+                  <input 
+                    type="number"
+                    value={editingProduct.stock}
+                    onChange={e => setEditingProduct({...editingProduct, stock: Number(e.target.value)})}
+                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Valor Unit. (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={editingProduct.unitValue}
+                    onChange={e => setEditingProduct({...editingProduct, unitValue: Number(e.target.value)})}
+                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary text-on-primary font-black py-5 rounded-2xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 mt-4"
+              >
+                {loading ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -984,7 +1082,7 @@ export default function App() {
       <Router>
         <div className="min-h-screen bg-surface text-on-surface font-body">
           <Header user={user} />
-          <main className="px-6 pt-4 pb-32 max-w-md mx-auto">
+          <main className="px-4 sm:px-6 lg:px-8 pt-4 pb-32 max-w-5xl mx-auto w-full transition-all">
             <AnimatePresence mode="wait">
               <Routes>
                 <Route path="/" element={<Dashboard products={products} entries={entries} exits={exits} />} />
