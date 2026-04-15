@@ -476,8 +476,8 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
           totalValue: item.totalValue,
           invoiceValue: mode === 'invoice' ? (Number(invoiceValue) || 0) : 0,
           invoiceNumber: mode === 'invoice' ? invoiceNumber : '',
-          buyerName: mode === 'invoice' ? buyerName : '',
-          storeName: mode === 'invoice' ? storeName : '',
+          buyerName,
+          storeName,
           date: new Date().toISOString(),
           authorUid: user.uid
         };
@@ -544,18 +544,19 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
                   <input type="number" step="0.01" value={invoiceValue} onChange={(e) => setInvoiceValue(e.target.value)} placeholder="0,00" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Comprou</label>
-                  <input type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Nome" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Loja</label>
-                  <input type="text" value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="Loja" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
-                </div>
-              </div>
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-4 pb-6 border-b border-outline-variant/10">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Comprou</label>
+              <input type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Nome" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Loja</label>
+              <input type="text" value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="Loja" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" required />
+            </div>
+          </div>
 
           <div className="space-y-4">
             <h3 className="font-bold text-on-surface">{mode === 'invoice' ? 'Adicionar Produto à Nota' : 'Dados do Produto'}</h3>
