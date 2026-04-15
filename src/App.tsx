@@ -351,91 +351,156 @@ const Dashboard = ({ products, entries, exits }: { products: Product[], entries:
 };
 
 const EntriesPage = ({ products, user }: { products: Product[], user: User }) => {
+  const [mode, setMode] = useState<'invoice' | 'unit'>('invoice');
+
+  // Invoice Data
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceValue, setInvoiceValue] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [storeName, setStoreName] = useState('');
+
+  // Current Item Data
   const [isNewProduct, setIsNewProduct] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [newProductName, setNewProductName] = useState('');
   const [newProductVehicle, setNewProductVehicle] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [totalValue, setTotalValue] = useState('');
-  const [invoiceValue, setInvoiceValue] = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [buyerName, setBuyerName] = useState('');
-  const [storeName, setStoreName] = useState('');
+  
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetCurrentItem = () => {
+    setIsNewProduct(false);
+    setSelectedProduct('');
+    setNewProductName('');
+    setNewProductVehicle('');
+    setQuantity(1);
+    setTotalValue('');
+  };
+
+  const handleAddItemToInvoice = () => {
     if (!isNewProduct && !selectedProduct) return;
     if (quantity <= 0) return;
 
+    let displayName = '';
+    if (isNewProduct) {
+      if (!newProductName) return;
+      displayName = `NOVO: ${newProductName} (${newProductVehicle})`;
+    } else {
+      const p = products.find(prod => prod.id === selectedProduct);
+      displayName = p ? `${p.name} - ${p.vehicleModel}` : 'Produto';
+    }
+
+    setItems([...items, {
+      id: Date.now().toString(),
+      isNewProduct,
+      selectedProduct,
+      newProductName,
+      newProductVehicle,
+      quantity: Number(quantity),
+      totalValue: Number(totalValue) || 0,
+      displayName
+    }]);
+
+    resetCurrentItem();
+  };
+
+  const removeItem = (id: string) => {
+    setItems(items.filter(i => i.id !== id));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
+
+    let itemsToProcess = [];
+
+    if (mode === 'unit') {
+      if (!isNewProduct && !selectedProduct) { setLoading(false); return; }
+      if (quantity <= 0) { setLoading(false); return; }
+      itemsToProcess = [{
+        isNewProduct,
+        selectedProduct,
+        newProductName,
+        newProductVehicle,
+        quantity: Number(quantity),
+        totalValue: Number(totalValue) || 0
+      }];
+    } else {
+      if (items.length === 0) { setLoading(false); return; }
+      itemsToProcess = items;
+    }
+
     try {
-      let finalProductId = selectedProduct;
-      let finalProductName = '';
-      let finalVehicleModel = '';
-      let finalCategory = 'Peças';
+      for (const item of itemsToProcess) {
+        let finalProductId = item.selectedProduct;
+        let finalProductName = '';
+        let finalVehicleModel = '';
+        let finalCategory = 'Peças';
 
-      if (isNewProduct) {
-        const newProductData = {
-          name: newProductName,
-          vehicleModel: newProductVehicle,
+        if (item.isNewProduct) {
+          const newProductData = {
+            name: item.newProductName,
+            vehicleModel: item.newProductVehicle,
+            category: finalCategory,
+            stock: item.quantity,
+            unitValue: (item.totalValue / item.quantity) || 0,
+            lastUpdated: new Date().toISOString()
+          };
+          const productRef = await addDoc(collection(db, 'products'), newProductData);
+          finalProductId = productRef.id;
+          finalProductName = item.newProductName;
+          finalVehicleModel = item.newProductVehicle;
+        } else {
+          const product = products.find(p => p.id === item.selectedProduct);
+          if (product) {
+            finalProductName = product.name;
+            finalVehicleModel = product.vehicleModel || '';
+            finalCategory = product.category;
+
+            const productRef = doc(db, 'products', item.selectedProduct);
+            await updateDoc(productRef, {
+              stock: product.stock + item.quantity,
+              lastUpdated: new Date().toISOString()
+            });
+          }
+        }
+
+        const entryData = {
+          productId: finalProductId,
+          productName: finalProductName,
+          vehicleModel: finalVehicleModel,
           category: finalCategory,
-          stock: Number(quantity),
-          unitValue: (Number(totalValue) / Number(quantity)) || 0,
-          lastUpdated: new Date().toISOString()
+          quantity: item.quantity,
+          totalValue: item.totalValue,
+          invoiceValue: mode === 'invoice' ? (Number(invoiceValue) || 0) : 0,
+          invoiceNumber: mode === 'invoice' ? invoiceNumber : '',
+          buyerName: mode === 'invoice' ? buyerName : '',
+          storeName: mode === 'invoice' ? storeName : '',
+          date: new Date().toISOString(),
+          authorUid: user.uid
         };
-        const productRef = await addDoc(collection(db, 'products'), newProductData);
-        finalProductId = productRef.id;
-        finalProductName = newProductName;
-        finalVehicleModel = newProductVehicle;
-      } else {
-        const product = products.find(p => p.id === selectedProduct);
-        if (!product) return;
-        finalProductName = product.name;
-        finalVehicleModel = product.vehicleModel || '';
-        finalCategory = product.category;
 
-        const productRef = doc(db, 'products', selectedProduct);
-        await updateDoc(productRef, {
-          stock: product.stock + Number(quantity),
-          lastUpdated: new Date().toISOString()
-        });
+        await addDoc(collection(db, 'entries'), entryData);
       }
 
-      const entryData = {
-        productId: finalProductId,
-        productName: finalProductName,
-        vehicleModel: finalVehicleModel,
-        category: finalCategory,
-        quantity: Number(quantity),
-        totalValue: Number(totalValue) || 0,
-        invoiceValue: Number(invoiceValue) || 0,
-        invoiceNumber,
-        buyerName,
-        storeName,
-        date: new Date().toISOString(),
-        authorUid: user.uid
-      };
-
-      await addDoc(collection(db, 'entries'), entryData);
-      
-      setIsNewProduct(false);
-      setSelectedProduct('');
-      setNewProductName('');
-      setNewProductVehicle('');
-      setQuantity(1);
-      setTotalValue('');
-      setInvoiceValue('');
+      // Reset everything on success
+      setItems([]);
       setInvoiceNumber('');
+      setInvoiceValue('');
       setBuyerName('');
       setStoreName('');
-      alert('Entrada registrada com sucesso!');
+      resetCurrentItem();
+      alert(mode === 'invoice' ? 'Nota e produtos registrados com sucesso!' : 'Entrada registrada com sucesso!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'entries');
     } finally {
       setLoading(false);
     }
   };
+
+  const invoiceItemsTotal = items.reduce((acc, curr) => acc + curr.totalValue, 0);
 
   return (
     <motion.div 
@@ -445,141 +510,145 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
     >
       <section className="space-y-2">
         <p className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Operação de Fluxo</p>
-        <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada da Loja</h2>
+        <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada de Loja</h2>
       </section>
 
-      <div className="bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-sm border border-outline-variant/10">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Produto da Peça</label>
-            <select 
-              value={isNewProduct ? 'NEW' : selectedProduct}
-              onChange={(e) => {
-                if (e.target.value === 'NEW') setIsNewProduct(true);
-                else { setIsNewProduct(false); setSelectedProduct(e.target.value); }
-              }}
-              className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-              required={!isNewProduct}
-            >
-              <option value="">Selecionar Peça/Produto do Inventário</option>
-              <option value="NEW" className="font-black text-primary">+ CADASTRAR NOVA PEÇA AQUI</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel}</option>
-              ))}
-            </select>
-          </div>
+      <div className="flex bg-surface-container-low rounded-2xl p-1 shadow-sm">
+        <button
+          onClick={() => setMode('invoice')}
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${mode === 'invoice' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant'}`}
+        >
+          Com Nota Fiscal
+        </button>
+        <button
+          onClick={() => setMode('unit')}
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${mode === 'unit' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant'}`}
+        >
+          Unidade sem Nota
+        </button>
+      </div>
 
-          {isNewProduct && (
-            <div className="grid grid-cols-2 gap-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Nome da Nova Peça</label>
-                <input 
-                  type="text"
-                  value={newProductName}
-                  onChange={e => setNewProductName(e.target.value)}
-                  placeholder="Ex: Amortecedor"
-                  className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                  required={isNewProduct}
-                />
+      <div className="bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-sm border border-outline-variant/10">
+        <div className="space-y-6">
+          
+          {mode === 'invoice' && (
+            <div className="space-y-4 pb-6 border-b border-outline-variant/10">
+              <h3 className="font-bold text-primary">Dados da Nota Fiscal</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Nº Nota Fiscal</label>
+                  <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Ex: 123456" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Nota (R$)</label>
+                  <input type="number" step="0.01" value={invoiceValue} onChange={(e) => setInvoiceValue(e.target.value)} placeholder="0,00" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
               </div>
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Veículo / Modelo</label>
-                <input 
-                  type="text"
-                  value={newProductVehicle}
-                  onChange={e => setNewProductVehicle(e.target.value)}
-                  placeholder="Ex: Honda Titan 150"
-                  className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                  required={isNewProduct}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Comprou</label>
+                  <input type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Nome" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Loja</label>
+                  <input type="text" value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="Loja" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <h3 className="font-bold text-on-surface">{mode === 'invoice' ? 'Adicionar Produto à Nota' : 'Dados do Produto'}</h3>
+            
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quantidade</label>
-              <input 
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Produto / Peça</label>
+              <select 
+                value={isNewProduct ? 'NEW' : selectedProduct}
+                onChange={(e) => {
+                  if (e.target.value === 'NEW') setIsNewProduct(true);
+                  else { setIsNewProduct(false); setSelectedProduct(e.target.value); }
+                }}
                 className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
+              >
+                <option value="">Selecionar Peça/Produto do Inventário</option>
+                <option value="NEW" className="font-black text-primary">+ CADASTRAR NOVA PEÇA</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel}</option>
+                ))}
+              </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Nº Nota Fiscal</label>
-              <input 
-                type="text"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                placeholder="Ex: 123456"
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
+
+            {isNewProduct && (
+              <div className="grid grid-cols-2 gap-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
+                <div className="space-y-2 col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Nome</label>
+                  <input type="text" value={newProductName} onChange={e => setNewProductName(e.target.value)} placeholder="Ex: Amortecedor" className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
+                <div className="space-y-2 col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Modelo Moto</label>
+                  <input type="text" value={newProductVehicle} onChange={e => setNewProductVehicle(e.target.value)} placeholder="Ex: Titan 150" className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quantidade</label>
+                <input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Pego (R$)</label>
+                <input type="number" step="0.01" value={totalValue} onChange={(e) => setTotalValue(e.target.value)} placeholder="0,00" className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10" />
+              </div>
             </div>
+
+            {mode === 'invoice' && (
+              <button 
+                type="button"
+                onClick={handleAddItemToInvoice}
+                disabled={(!isNewProduct && !selectedProduct) || quantity <= 0}
+                className="w-full bg-secondary-container text-on-secondary-container font-black py-4 rounded-2xl active:scale-95 transition-all disabled:opacity-50 mt-2"
+              >
+                + Adicionar à Nota
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Total Produtos (R$)</label>
-              <input 
-                type="number"
-                step="0.01"
-                value={totalValue}
-                onChange={(e) => setTotalValue(e.target.value)}
-                placeholder="0,00"
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
+          {mode === 'invoice' && (
+            <div className="space-y-3 pt-6 border-t border-outline-variant/10">
+              <h3 className="font-bold text-sm uppercase tracking-widest">Itens nesta Nota</h3>
+              {items.map(item => (
+                <div key={item.id} className="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between border border-outline-variant/5">
+                  <div>
+                    <h4 className="font-bold text-sm">{item.displayName}</h4>
+                    <p className="text-xs text-on-surface-variant">{item.quantity} unidades | R$ {item.totalValue.toFixed(2)}</p>
+                  </div>
+                  <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-error hover:bg-error/10 rounded-xl transition-colors">
+                    <span className="material-symbols-outlined text-xl">delete</span>
+                  </button>
+                </div>
+              ))}
+              {items.length === 0 && <p className="text-sm text-on-surface-variant text-center my-4">Nenhum produto adicionado à nota ainda.</p>}
+              
+              <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 flex justify-between items-center">
+                <span className="font-bold text-sm text-on-surface-variant">Soma dos Itens:</span>
+                <span className={`font-black text-lg ${invoiceItemsTotal > (Number(invoiceValue)||0) ? 'text-error' : 'text-primary'}`}>
+                  R$ {invoiceItemsTotal.toFixed(2)}
+                </span>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Nota (R$)</label>
-              <input 
-                type="number"
-                step="0.01"
-                value={invoiceValue}
-                onChange={(e) => setInvoiceValue(e.target.value)}
-                placeholder="0,00"
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Comprou</label>
-              <input 
-                type="text"
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
-                placeholder="Nome do comprador"
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Loja</label>
-              <input 
-                type="text"
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
-                placeholder="Nome da loja"
-                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-                required
-              />
-            </div>
-          </div>
+          )}
 
           <button 
-            type="submit"
-            disabled={loading}
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading || (mode === 'invoice' && items.length === 0) || (mode === 'unit' && (!selectedProduct && !isNewProduct))}
             className="w-full bg-primary text-on-primary font-black py-5 rounded-2xl shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
           >
-            {loading ? 'Processando...' : 'Salvar Entrada'}
+            {loading ? 'Sincronizando...' : (mode === 'invoice' ? 'Finalizar Nota Fiscal' : 'Salvar Entrada')}
           </button>
-        </form>
+
+        </div>
       </div>
     </motion.div>
   );
