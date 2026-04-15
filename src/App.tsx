@@ -351,7 +351,10 @@ const Dashboard = ({ products, entries, exits }: { products: Product[], entries:
 };
 
 const EntriesPage = ({ products, user }: { products: Product[], user: User }) => {
+  const [isNewProduct, setIsNewProduct] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductVehicle, setNewProductVehicle] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [totalValue, setTotalValue] = useState('');
   const [invoiceValue, setInvoiceValue] = useState('');
@@ -362,18 +365,48 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct || quantity <= 0) return;
+    if (!isNewProduct && !selectedProduct) return;
+    if (quantity <= 0) return;
 
     setLoading(true);
     try {
-      const product = products.find(p => p.id === selectedProduct);
-      if (!product) return;
+      let finalProductId = selectedProduct;
+      let finalProductName = '';
+      let finalVehicleModel = '';
+      let finalCategory = 'Peças';
+
+      if (isNewProduct) {
+        const newProductData = {
+          name: newProductName,
+          vehicleModel: newProductVehicle,
+          category: finalCategory,
+          stock: Number(quantity),
+          unitValue: (Number(totalValue) / Number(quantity)) || 0,
+          lastUpdated: new Date().toISOString()
+        };
+        const productRef = await addDoc(collection(db, 'products'), newProductData);
+        finalProductId = productRef.id;
+        finalProductName = newProductName;
+        finalVehicleModel = newProductVehicle;
+      } else {
+        const product = products.find(p => p.id === selectedProduct);
+        if (!product) return;
+        finalProductName = product.name;
+        finalVehicleModel = product.vehicleModel || '';
+        finalCategory = product.category;
+
+        const productRef = doc(db, 'products', selectedProduct);
+        await updateDoc(productRef, {
+          stock: product.stock + Number(quantity),
+          lastUpdated: new Date().toISOString()
+        });
+      }
 
       const entryData = {
-        productId: selectedProduct,
-        productName: product.name,
-        vehicleModel: product.vehicleModel || '',
-        category: product.category,
+        productId: finalProductId,
+        productName: finalProductName,
+        vehicleModel: finalVehicleModel,
+        category: finalCategory,
         quantity: Number(quantity),
         totalValue: Number(totalValue) || 0,
         invoiceValue: Number(invoiceValue) || 0,
@@ -386,13 +419,10 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
       await addDoc(collection(db, 'entries'), entryData);
       
-      const productRef = doc(db, 'products', selectedProduct);
-      await updateDoc(productRef, {
-        stock: product.stock + Number(quantity),
-        lastUpdated: new Date().toISOString()
-      });
-
+      setIsNewProduct(false);
       setSelectedProduct('');
+      setNewProductName('');
+      setNewProductVehicle('');
       setQuantity(1);
       setTotalValue('');
       setInvoiceValue('');
@@ -423,17 +453,48 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Produto da Peça</label>
             <select 
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
+              value={isNewProduct ? 'NEW' : selectedProduct}
+              onChange={(e) => {
+                if (e.target.value === 'NEW') setIsNewProduct(true);
+                else { setIsNewProduct(false); setSelectedProduct(e.target.value); }
+              }}
               className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-              required
+              required={!isNewProduct}
             >
               <option value="">Selecionar Peça/Produto do Inventário</option>
+              <option value="NEW" className="font-black text-primary">+ CADASTRAR NOVA PEÇA AQUI</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel}</option>
               ))}
             </select>
           </div>
+
+          {isNewProduct && (
+            <div className="grid grid-cols-2 gap-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
+              <div className="space-y-2 col-span-2 sm:col-span-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Nome da Nova Peça</label>
+                <input 
+                  type="text"
+                  value={newProductName}
+                  onChange={e => setNewProductName(e.target.value)}
+                  placeholder="Ex: Amortecedor"
+                  className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                  required={isNewProduct}
+                />
+              </div>
+              <div className="space-y-2 col-span-2 sm:col-span-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-primary px-1">Veículo / Modelo</label>
+                <input 
+                  type="text"
+                  value={newProductVehicle}
+                  onChange={e => setNewProductVehicle(e.target.value)}
+                  placeholder="Ex: Honda Titan 150"
+                  className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                  required={isNewProduct}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
