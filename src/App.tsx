@@ -217,7 +217,7 @@ const Header = ({ user }: { user: User }) => (
 
 const Dashboard = ({ products, entries, exits }: { products: Product[], entries: Entry[], exits: Exit[] }) => {
   const monthlyTotal = useMemo(() => {
-    return entries.reduce((acc, curr) => acc + (curr.quantity * curr.unitValue), 0);
+    return entries.reduce((acc, curr) => acc + (curr.totalValue || 0), 0);
   }, [entries]);
 
   const monthlyExits = useMemo(() => {
@@ -353,12 +353,16 @@ const Dashboard = ({ products, entries, exits }: { products: Product[], entries:
 const EntriesPage = ({ products, user }: { products: Product[], user: User }) => {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [unitValue, setUnitValue] = useState('');
+  const [totalValue, setTotalValue] = useState('');
+  const [invoiceValue, setInvoiceValue] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [storeName, setStoreName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct || quantity <= 0 || !unitValue) return;
+    if (!selectedProduct || quantity <= 0) return;
 
     setLoading(true);
     try {
@@ -368,16 +372,20 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
       const entryData = {
         productId: selectedProduct,
         productName: product.name,
+        vehicleModel: product.vehicleModel || '',
         category: product.category,
         quantity: Number(quantity),
-        unitValue: Number(unitValue),
+        totalValue: Number(totalValue) || 0,
+        invoiceValue: Number(invoiceValue) || 0,
+        invoiceNumber,
+        buyerName,
+        storeName,
         date: new Date().toISOString(),
         authorUid: user.uid
       };
 
       await addDoc(collection(db, 'entries'), entryData);
       
-      // Update product stock
       const productRef = doc(db, 'products', selectedProduct);
       await updateDoc(productRef, {
         stock: product.stock + Number(quantity),
@@ -386,7 +394,11 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
       setSelectedProduct('');
       setQuantity(1);
-      setUnitValue('');
+      setTotalValue('');
+      setInvoiceValue('');
+      setInvoiceNumber('');
+      setBuyerName('');
+      setStoreName('');
       alert('Entrada registrada com sucesso!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'entries');
@@ -403,22 +415,22 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
     >
       <section className="space-y-2">
         <p className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Operação de Fluxo</p>
-        <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada de Estoque</h2>
+        <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada da Loja</h2>
       </section>
 
-      <div className="bg-surface-container-lowest rounded-3xl p-8 shadow-sm border border-outline-variant/10">
+      <div className="bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-sm border border-outline-variant/10">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Produto</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Produto da Peça</label>
             <select 
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
               className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
               required
             >
-              <option value="">Selecionar Produto</option>
+              <option value="">Selecionar Peça/Produto do Inventário</option>
               {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name} (SKU: {p.sku})</option>
+                <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel}</option>
               ))}
             </select>
           </div>
@@ -435,13 +447,64 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Unitário (R$)</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Nº Nota Fiscal</label>
+              <input 
+                type="text"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="Ex: 123456"
+                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Total Produtos (R$)</label>
               <input 
                 type="number"
                 step="0.01"
-                value={unitValue}
-                onChange={(e) => setUnitValue(e.target.value)}
+                value={totalValue}
+                onChange={(e) => setTotalValue(e.target.value)}
                 placeholder="0,00"
+                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Valor Nota (R$)</label>
+              <input 
+                type="number"
+                step="0.01"
+                value={invoiceValue}
+                onChange={(e) => setInvoiceValue(e.target.value)}
+                placeholder="0,00"
+                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Comprou</label>
+              <input 
+                type="text"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                placeholder="Nome do comprador"
+                className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Loja</label>
+              <input 
+                type="text"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="Nome da loja"
                 className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
                 required
               />
@@ -463,6 +526,7 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
 const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
   const [recipient, setRecipient] = useState('');
+  const [destination, setDestination] = useState('');
   const [selectedItems, setSelectedItems] = useState<ExitItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -476,7 +540,7 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
       productId,
       productName: product.name,
       quantity: 1,
-      sku: product.sku
+      vehicleModel: product.vehicleModel || ''
     }]);
   };
 
@@ -495,22 +559,21 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipient || selectedItems.length === 0) return;
+    if (!recipient || !destination || selectedItems.length === 0) return;
 
     setLoading(true);
     try {
       const exitData = {
         recipient,
+        destination,
         date: new Date().toISOString(),
         items: selectedItems,
         totalVolumes: selectedItems.reduce((acc, curr) => acc + curr.quantity, 0),
-        estimatedWeight: selectedItems.length * 0.5, // Mock weight
         authorUid: user.uid
       };
 
       await addDoc(collection(db, 'exits'), exitData);
 
-      // Update stocks
       for (const item of selectedItems) {
         const product = products.find(p => p.id === item.productId);
         if (product) {
@@ -523,6 +586,7 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
       }
 
       setRecipient('');
+      setDestination('');
       setSelectedItems([]);
       alert('Saída registrada com sucesso!');
     } catch (error) {
@@ -545,28 +609,46 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-surface-container-low p-6 rounded-3xl space-y-4">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Destinatário</label>
-          <input 
-            type="text"
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            placeholder="Nome do cliente ou unidade"
-            className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
-            required
-          />
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem Tirou a Peça?</label>
+            <input 
+              type="text"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder="Nome de quem retirou"
+              className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Qual Destino (Oficina)</label>
+            <input 
+              type="text"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="Oficina ou local de destino"
+              className="w-full bg-surface-container-lowest border-none rounded-2xl py-4 px-4 text-on-surface font-bold focus:ring-2 focus:ring-primary/10"
+              required
+            />
+          </div>
         </div>
 
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-bold text-sm uppercase tracking-widest text-on-surface">Itens Selecionados</h3>
+            <h3 className="font-bold text-sm uppercase tracking-widest text-on-surface">Peças Selecionadas</h3>
             <select 
-              onChange={(e) => e.target.value && addItem(e.target.value)}
-              className="text-xs font-bold text-primary bg-primary/5 border-none rounded-full px-4 py-2"
+              onChange={(e) => {
+                if(e.target.value) {
+                  addItem(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              className="text-xs font-bold text-primary bg-primary/5 border-none rounded-full px-4 py-2 hover:bg-primary/10 cursor-pointer"
               value=""
             >
-              <option value="">+ Adicionar Item</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              <option value="">+ Adicionar Peça</option>
+              {products.filter(p => p.stock > 0).map(p => (
+                <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel} (Estoque: {p.stock})</option>
               ))}
             </select>
           </div>
@@ -576,7 +658,7 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
               <div key={item.productId} className="bg-white p-4 rounded-2xl shadow-sm flex gap-4 items-center border border-outline-variant/10">
                 <div className="flex-1">
                   <h4 className="font-bold text-on-surface text-sm">{item.productName}</h4>
-                  <p className="text-[10px] font-mono text-on-surface-variant">SKU: {item.sku}</p>
+                  <p className="text-[10px] font-bold text-secondary tracking-widest uppercase">{item.vehicleModel}</p>
                 </div>
                 <div className="flex items-center gap-3 bg-surface-container-low px-3 py-1.5 rounded-full">
                   <button type="button" onClick={() => updateItemQuantity(item.productId, -1)} className="text-primary font-bold">-</button>
@@ -588,6 +670,11 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
                 </button>
               </div>
             ))}
+            {selectedItems.length === 0 && (
+              <div className="text-center py-6 border-2 border-dashed border-outline-variant/20 rounded-2xl">
+                <p className="text-on-surface-variant font-medium text-sm">Nenhuma peça adicionada ainda.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -606,12 +693,12 @@ const ExitsPage = ({ products, user }: { products: Product[], user: User }) => {
 const InventoryPage = ({ products, user }: { products: Product[], user: User }) => {
   const [filter, setFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', sku: '', category: 'Peças', unitValue: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', vehicleModel: '', category: 'Peças', unitValue: '' });
   const [loading, setLoading] = useState(false);
   
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(filter.toLowerCase()) || 
-    p.sku.toLowerCase().includes(filter.toLowerCase())
+    (p.vehicleModel || '').toLowerCase().includes(filter.toLowerCase())
   );
 
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -625,7 +712,7 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
         lastUpdated: new Date().toISOString()
       });
       setShowAddModal(false);
-      setNewProduct({ name: '', sku: '', category: 'Peças', unitValue: '' });
+      setNewProduct({ name: '', vehicleModel: '', category: 'Peças', unitValue: '' });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'products');
     } finally {
@@ -658,7 +745,7 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Buscar por SKU ou nome..."
+          placeholder="Buscar produto ou veículo..."
           className="w-full bg-surface-container-high border-none rounded-2xl py-4 pl-12 pr-4 text-on-surface font-bold focus:ring-2 focus:ring-primary transition-all"
         />
       </div>
@@ -675,12 +762,12 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
             </div>
             <div className="flex flex-col justify-between py-1 flex-grow">
               <div>
-                <span className="text-[10px] font-bold text-secondary tracking-widest uppercase">ID: {product.sku}</span>
+                <span className="text-[10px] font-bold text-secondary tracking-widest uppercase">{product.vehicleModel}</span>
                 <h3 className="text-lg font-bold text-on-surface leading-tight mt-1">{product.name}</h3>
               </div>
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-end mt-2">
                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                  product.stock > 10 ? 'bg-secondary-container text-on-secondary-container' : 'bg-error-container text-on-error-container'
+                  product.stock > 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-error-container text-on-error-container'
                 }`}>
                   {product.stock} em estoque
                 </span>
@@ -701,16 +788,16 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
             <h3 className="text-2xl font-black tracking-tight mb-6">Novo Produto</h3>
             <form onSubmit={handleAddProduct} className="space-y-4">
               <input 
-                placeholder="Nome do Produto"
+                placeholder="Nome da Peça/Produto"
                 value={newProduct.name}
                 onChange={e => setNewProduct({...newProduct, name: e.target.value})}
                 className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
                 required
               />
               <input 
-                placeholder="SKU"
-                value={newProduct.sku}
-                onChange={e => setNewProduct({...newProduct, sku: e.target.value})}
+                placeholder="Para qual veículo/modelo?"
+                value={newProduct.vehicleModel}
+                onChange={e => setNewProduct({...newProduct, vehicleModel: e.target.value})}
                 className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
                 required
               />
@@ -720,11 +807,10 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
                 className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 font-bold"
               >
                 <option value="Peças">Peças</option>
-                <option value="Veículos">Veículos</option>
                 <option value="Acessórios">Acessórios</option>
               </select>
               <input 
-                placeholder="Valor Unitário (R$)"
+                placeholder="Valor Unitário Base (R$)"
                 type="number"
                 step="0.01"
                 value={newProduct.unitValue}

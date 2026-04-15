@@ -1,7 +1,7 @@
 export interface Product {
   id: string;
   name: string;
-  sku: string;
+  vehicleModel: string;
   category: string;
   stock: number;
   unitValue: number;
@@ -13,9 +13,14 @@ export interface Entry {
   id: string;
   productId: string;
   productName: string;
+  vehicleModel: string;
   category: string;
   quantity: number;
-  unitValue: number;
+  totalValue: number;
+  invoiceValue: number;
+  invoiceNumber: string;
+  buyerName: string;
+  storeName: string;
   date: string;
   authorUid: string;
 }
@@ -24,16 +29,15 @@ export interface ExitItem {
   productId: string;
   productName: string;
   quantity: number;
-  sku: string;
+  vehicleModel: string;
 }
 
 export interface Exit {
   id: string;
   recipient: string;
-  vehicle?: string;
+  destination: string;
   date: string;
   items: ExitItem[];
   totalVolumes: number;
-  estimatedWeight: number;
   authorUid: string;
 }
