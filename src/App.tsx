@@ -355,7 +355,8 @@ const Dashboard = ({ products, entries, exits }: { products: Product[], entries:
   );
 };
 
-const EntriesPage = ({ products, user }: { products: Product[], user: User }) => {
+const EntriesPage = ({ products, user, entries }: { products: Product[], user: User, entries: Entry[] }) => {
+  const [view, setView] = useState<'create' | 'list'>('create');
   const [mode, setMode] = useState<'invoice' | 'unit'>('invoice');
 
   // Invoice Data
@@ -524,18 +525,63 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
   const invoiceItemsTotal = items.reduce((acc, curr) => acc + curr.totalValue, 0);
 
+  const groupedInvoices = useMemo(() => {
+    const grouped = new Map<string, { date: string, buyerName: string, storeName: string, total: number, items: Entry[], invoiceValue: number }>();
+    const singles: Entry[] = [];
+
+    entries.forEach(entry => {
+      if (entry.invoiceNumber && entry.invoiceNumber.trim() !== '') {
+        if (!grouped.has(entry.invoiceNumber)) {
+          grouped.set(entry.invoiceNumber, {
+            date: entry.date,
+            buyerName: entry.buyerName,
+            storeName: entry.storeName,
+            total: 0,
+            invoiceValue: entry.invoiceValue || 0,
+            items: []
+          });
+        }
+        const g = grouped.get(entry.invoiceNumber)!;
+        g.items.push(entry);
+        g.total += entry.totalValue;
+      } else {
+        singles.push(entry);
+      }
+    });
+
+    return {
+      withInvoice: Array.from(grouped.entries()).map(([num, data]) => ({ num, ...data })),
+      singles
+    };
+  }, [entries]);
+
   return (
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       className="space-y-8 pb-12"
     >
-      <section className="space-y-2">
-        <p className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Operação de Fluxo</p>
-        <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada de Loja</h2>
+      <section className="space-y-2 flex justify-between items-center">
+        <div>
+          <p className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Operação de Fluxo</p>
+          <h2 className="text-4xl font-black tracking-tighter text-on-surface">Entrada de Loja</h2>
+        </div>
+        <div>
+          {view === 'list' ? (
+            <button onClick={() => setView('create')} className="bg-primary text-on-primary font-bold py-2 px-4 rounded-xl shadow-sm text-sm">
+              + Nova Entrada
+            </button>
+          ) : (
+            <button onClick={() => setView('list')} className="bg-surface-container-high text-on-surface font-bold py-2 px-4 rounded-xl shadow-sm text-sm">
+              Ver Histórico
+            </button>
+          )}
+        </div>
       </section>
 
-      <div className="flex bg-surface-container-low rounded-2xl p-1 shadow-sm">
+      {view === 'create' && (
+        <div className="space-y-6">
+          <div className="flex bg-surface-container-low rounded-2xl p-1 shadow-sm">
         <button
           onClick={() => setMode('invoice')}
           className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${mode === 'invoice' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant'}`}
@@ -683,6 +729,71 @@ const EntriesPage = ({ products, user }: { products: Product[], user: User }) =>
 
         </div>
       </div>
+      </div>
+      )}
+
+      {view === 'list' && (
+        <div className="space-y-6">
+          <h3 className="font-bold text-lg text-primary uppercase tracking-widest mb-4 border-b border-outline-variant/10 pb-2">Notas Fiscais Cadastradas</h3>
+          <div className="space-y-4">
+            {groupedInvoices.withInvoice.map((inv, idx) => (
+              <div key={idx} className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm space-y-3">
+                <div className="flex justify-between items-start border-b border-outline-variant/10 pb-3">
+                  <div>
+                    <h3 className="font-black text-lg text-primary uppercase tracking-tight">NF: {inv.num}</h3>
+                    <p className="text-xs font-bold text-on-surface-variant">Comprador: {inv.buyerName} • Loja: {inv.storeName}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-outline">{format(parseISO(inv.date), 'dd/MM/yyyy')}</span>
+                    <p className="text-xs font-bold text-secondary mt-1">Total NF: R$ {inv.invoiceValue.toLocaleString('pt-BR')}</p>
+                  </div>
+                </div>
+                
+                <div className="text-xs pt-1">
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Itens da Nota ({inv.items.reduce((a,b)=>a+b.quantity,0)} UND.)</p>
+                  <ul className="space-y-1">
+                    {inv.items.map((item, i) => (
+                      <li key={i} className="flex justify-between text-on-surface font-medium bg-surface-container-low px-3 py-1.5 rounded-lg">
+                        <span>{item.quantity}x {item.productName} <span className="text-outline uppercase text-[9px] ml-1">{item.vehicleModel}</span></span>
+                        <span className="font-bold text-primary">R$ {item.totalValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex justify-end mt-2">
+                    <span className="font-black text-sm text-secondary">Soma em Produtos: R$ {inv.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {groupedInvoices.withInvoice.length === 0 && (
+              <div className="text-center py-6 text-outline font-medium text-sm border border-dashed border-outline-variant/20 rounded-2xl">
+                Nenhuma Nota Fiscal cadastrada
+              </div>
+            )}
+          </div>
+
+          <h3 className="font-bold text-lg text-secondary uppercase tracking-widest mb-4 mt-8 border-b border-outline-variant/10 pb-2">Entradas Avulsas (Sem Nota)</h3>
+          <div className="space-y-3">
+            {groupedInvoices.singles.slice(0, 15).map((entry, idx) => (
+              <div key={idx} className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 flex justify-between items-center shadow-sm">
+                 <div>
+                    <h4 className="font-bold text-sm text-on-surface">{entry.productName}</h4>
+                    <p className="text-[10px] text-on-surface-variant uppercase font-bold">{entry.quantity}x unidades • {entry.buyerName}</p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-xs font-black text-secondary">R$ {entry.totalValue.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+                    <p className="text-[9px] text-outline uppercase tracking-widest font-bold">{format(parseISO(entry.date), 'dd/MM/yyyy')}</p>
+                 </div>
+              </div>
+            ))}
+            {groupedInvoices.singles.length === 0 && (
+              <div className="text-center py-6 text-outline font-medium text-sm border border-dashed border-outline-variant/20 rounded-2xl">
+                Nenhuma entrada avulsa cadastrada
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -1380,7 +1491,7 @@ export default function App() {
                 ) : (
                   <>
                     <Route path="/" element={<Dashboard products={products} entries={entries} exits={exits} />} />
-                    <Route path="/entries" element={<EntriesPage products={products} user={user} />} />
+                    <Route path="/entries" element={<EntriesPage products={products} user={user} entries={entries} />} />
                     <Route path="/exits" element={<ExitsPage products={products} user={user} />} />
                     <Route path="/inventory" element={<InventoryPage products={products} user={user} />} />
                     <Route path="/maintenances" element={<MaintenancesPage products={products} user={user} role={userRole} maintenances={maintenances} />} />
