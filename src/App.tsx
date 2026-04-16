@@ -28,7 +28,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword
 } from './firebase';
-import { Product, Entry, Exit, ExitItem } from './types';
+import { Product, Entry, Exit, ExitItem, Maintenance, MaintenancePartRequested } from './types';
 import { format, subDays, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -161,15 +161,20 @@ const LoginScreen = () => {
   );
 };
 
-const Navbar = ({ user }: { user: User }) => {
+const Navbar = ({ user, userRole }: { user: User, userRole: string }) => {
   const location = useLocation();
   
-  const navItems = [
-    { path: '/', label: 'Início', icon: 'dashboard' },
-    { path: '/entries', label: 'Entradas', icon: 'add_box' },
-    { path: '/exits', label: 'Saídas', icon: 'local_shipping' },
-    { path: '/inventory', label: 'Estoque', icon: 'category' },
-  ];
+  const navItems = userRole === 'monitor' 
+    ? [
+        { path: '/maintenances', label: 'Revisões', icon: 'handyman' },
+      ]
+    : [
+        { path: '/', label: 'Início', icon: 'dashboard' },
+        { path: '/entries', label: 'Entradas', icon: 'add_box' },
+        { path: '/exits', label: 'Saídas', icon: 'local_shipping' },
+        { path: '/inventory', label: 'Estoque', icon: 'category' },
+        { path: '/maintenances', label: 'Revisões', icon: 'handyman' },
+      ];
 
   return (
     <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#edf4ff]/80 backdrop-blur-xl border-t border-[#091d2e]/10 shadow-[0_-8px_24px_rgba(9,29,46,0.06)] z-50 rounded-t-3xl md:max-w-md md:left-1/2 md:-translate-x-1/2">
@@ -1031,18 +1036,275 @@ const InventoryPage = ({ products, user }: { products: Product[], user: User }) 
   );
 };
 
+const MaintenancesPage = ({ products, user, role, maintenances }: { products: Product[], user: User, role: string, maintenances: Maintenance[] }) => {
+  const [view, setView] = useState<'list' | 'create'>('list');
+  
+  // form fields
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [takenBy, setTakenBy] = useState('');
+  const [workshop, setWorkshop] = useState('');
+  const [mechanicName, setMechanicName] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [observation, setObservation] = useState('');
+
+  const [selectedStockParts, setSelectedStockParts] = useState<ExitItem[]>([]);
+  
+  const [reqPartName, setReqPartName] = useState('');
+  const [reqPartValue, setReqPartValue] = useState('');
+  const [requestedParts, setRequestedParts] = useState<MaintenancePartRequested[]>([]);
+
+  const [loading, setLoading] = useState(false);
+
+  const addStockPart = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    if (selectedStockParts.find(item => item.productId === productId)) return;
+    setSelectedStockParts([...selectedStockParts, {
+      productId,
+      productName: product.name,
+      quantity: 1,
+      vehicleModel: product.vehicleModel || ''
+    }]);
+  };
+
+  const updateStockPartQty = (productId: string, delta: number) => {
+    setSelectedStockParts(selectedStockParts.map(item => {
+      if (item.productId === productId) {
+        return { ...item, quantity: Math.max(1, item.quantity + delta) };
+      }
+      return item;
+    }));
+  };
+
+  const removeStockPart = (productId: string) => {
+    setSelectedStockParts(selectedStockParts.filter(item => item.productId !== productId));
+  };
+
+  const addRequestedPart = () => {
+    if (!reqPartName || !reqPartValue) return;
+    setRequestedParts([...requestedParts, {
+      id: Date.now().toString(),
+      name: reqPartName,
+      value: Number(reqPartValue)
+    }]);
+    setReqPartName('');
+    setReqPartValue('');
+  };
+
+  const removeRequestedPart = (id: string) => {
+    setRequestedParts(requestedParts.filter(item => item.id !== id));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehiclePlate || !vehicleModel || !takenBy || !workshop || !mechanicName) return;
+    setLoading(true);
+    try {
+      const maintenanceData = {
+        vehiclePlate, vehicleModel, date: new Date().toISOString(), takenBy, workshop, mechanicName,
+        partsTaken: selectedStockParts, partsRequested: requestedParts, deliveryDate, observation, authorUid: user.uid
+      };
+      await addDoc(collection(db, 'maintenances'), maintenanceData);
+      for (const item of selectedStockParts) {
+        const product = products.find(p => p.id === item.productId);
+        if (product) {
+          const productRef = doc(db, 'products', item.productId);
+          await updateDoc(productRef, { stock: product.stock - item.quantity, lastUpdated: new Date().toISOString() });
+        }
+      }
+      setVehiclePlate(''); setVehicleModel(''); setTakenBy(''); setWorkshop(''); setMechanicName(''); 
+      setDeliveryDate(''); setObservation(''); setSelectedStockParts([]); setRequestedParts([]);
+      alert('Revisão/Manutenção registrada com sucesso!');
+      setView('list');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'maintenances');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8 pb-12">
+      <section className="space-y-2 flex justify-between items-center">
+        <div>
+          <p className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Oficina</p>
+          <h2 className="text-4xl font-black tracking-tighter text-on-surface">Revisões</h2>
+        </div>
+        <div>
+          {view === 'list' ? (
+            <button onClick={() => setView('create')} className="bg-primary text-on-primary font-bold py-2 px-4 rounded-xl shadow-sm text-sm">
+              + Nova OS
+            </button>
+          ) : (
+            <button onClick={() => setView('list')} className="bg-surface-container-high text-on-surface font-bold py-2 px-4 rounded-xl shadow-sm text-sm">
+              Voltar
+            </button>
+          )}
+        </div>
+      </section>
+
+      {view === 'create' && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-surface-container-low p-6 rounded-3xl space-y-4">
+            <h3 className="font-bold text-primary">Dados do Serviço</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Placa do Veículo</label>
+                <input type="text" value={vehiclePlate} onChange={e => setVehiclePlate(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Modelo do Veículo</label>
+                <input type="text" value={vehicleModel} onChange={e => setVehicleModel(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Quem levou a moto?</label>
+                <input type="text" value={takenBy} onChange={e => setTakenBy(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Oficina</label>
+                <input type="text" value={workshop} onChange={e => setWorkshop(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Nome do Mecânico</label>
+                <input type="text" value={mechanicName} onChange={e => setMechanicName(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Data de Entrega</label>
+                <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Observação</label>
+                <textarea value={observation} onChange={e => setObservation(e.target.value)} className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold min-h-[80px]" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-surface-container-low p-6 rounded-3xl space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-secondary">Peças do Estoque (Baixa de Produto)</h3>
+              <select onChange={e => { if(e.target.value) { addStockPart(e.target.value); e.target.value = ""; } }} className="text-xs font-bold text-primary bg-primary/5 border-none rounded-full px-4 py-2 hover:bg-primary/10 cursor-pointer" value="">
+                <option value="">+ Selecionar do Estoque</option>
+                {products.filter(p => p.stock > 0).map(p => <option key={p.id} value={p.id}>{p.name} - {p.vehicleModel} (Qtd: {p.stock})</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              {selectedStockParts.map(item => (
+                <div key={item.productId} className="bg-surface-container-lowest p-3 rounded-2xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm text-on-surface">{item.productName}</h4>
+                    <p className="text-[10px] text-on-surface-variant uppercase">{item.vehicleModel}</p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-surface-container-low px-2 py-1 rounded-full">
+                    <button type="button" onClick={() => updateStockPartQty(item.productId, -1)} className="text-secondary font-bold px-1">-</button>
+                    <span className="text-sm font-black w-4 text-center">{item.quantity}</span>
+                    <button type="button" onClick={() => updateStockPartQty(item.productId, 1)} className="text-secondary font-bold px-1">+</button>
+                  </div>
+                  <button type="button" onClick={() => removeStockPart(item.productId)} className="text-error"><span className="material-symbols-outlined text-sm">delete</span></button>
+                </div>
+              ))}
+              {selectedStockParts.length === 0 && <p className="text-xs text-on-surface-variant text-center opacity-70">Nenhuma peça do estoque utilizada.</p>}
+            </div>
+          </div>
+
+          <div className="bg-surface-container-low p-6 rounded-3xl space-y-4">
+            <h3 className="font-bold text-tertiary-fixed-dim">Peças Solicitadas pelo Mecânico (Compradas Fora)</h3>
+            <div className="flex gap-2">
+              <input type="text" value={reqPartName} onChange={e => setReqPartName(e.target.value)} placeholder="Nome da peça" className="flex-grow bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-sm font-bold" />
+              <input type="number" step="0.01" value={reqPartValue} onChange={e => setReqPartValue(e.target.value)} placeholder="Valor R$" className="w-28 bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-sm font-bold" />
+              <button type="button" onClick={addRequestedPart} className="bg-tertiary-fixed-dim text-on-tertiary-fixed font-bold px-4 rounded-xl text-sm">+</button>
+            </div>
+            <div className="space-y-2 mt-4">
+              {requestedParts.map(item => (
+                <div key={item.id} className="bg-surface-container-lowest p-3 rounded-2xl flex items-center justify-between">
+                  <span className="font-bold text-sm">{item.name}</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-black text-tertiary-fixed-dim">R$ {(item.value || 0).toFixed(2)}</span>
+                    <button type="button" onClick={() => removeRequestedPart(item.id)} className="text-error"><span className="material-symbols-outlined text-sm">delete</span></button>
+                  </div>
+                </div>
+              ))}
+              {requestedParts.length === 0 && <p className="text-xs text-on-surface-variant text-center opacity-70">Nenhuma peça adicional solicitada.</p>}
+            </div>
+          </div>
+
+          <button type="submit" disabled={loading} className="w-full bg-primary text-on-primary font-black py-5 rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+            {loading ? 'Processando...' : 'Registrar OS de Manutenção'}
+          </button>
+        </form>
+      )}
+
+      {view === 'list' && (
+        <div className="space-y-4">
+          {maintenances.map(m => (
+            <div key={m.id} className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm space-y-3">
+              <div className="flex justify-between items-start border-b border-outline-variant/10 pb-3">
+                <div>
+                  <h3 className="font-black text-lg text-primary uppercase tracking-tight">{m.vehiclePlate}</h3>
+                  <p className="text-xs font-bold text-on-surface-variant">{m.vehicleModel} • {m.workshop}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-outline">{m.date ? format(parseISO(m.date), 'dd/MM/yyyy HH:mm') : ''}</span>
+                  <p className="text-xs font-bold text-secondary mt-1">Mecânico: {m.mechanicName}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Peças Estoque</p>
+                  {m.partsTaken && m.partsTaken.length > 0 ? (
+                    <ul className="list-disc list-inside text-on-surface ml-1 mt-1 font-medium">
+                      {m.partsTaken.map((p, i) => <li key={i}>{p.quantity}x {p.productName}</li>)}
+                    </ul>
+                  ) : <span className="text-outline italic">Nenhuma</span>}
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Peças Compradas</p>
+                  {m.partsRequested && m.partsRequested.length > 0 ? (
+                    <ul className="list-disc list-inside text-tertiary-fixed-dim ml-1 mt-1 font-bold">
+                      {m.partsRequested.map((p, i) => <li key={i}>{p.name} (R$ {Number(p.value).toFixed(2)})</li>)}
+                    </ul>
+                  ) : <span className="text-outline italic">Nenhuma</span>}
+                </div>
+              </div>
+              <div className="pt-2">
+                {m.observation && <p className="text-xs text-on-surface-variant italic border-l-2 border-outline/30 pl-2">Obs: {m.observation}</p>}
+                {m.deliveryDate && <p className="text-[10px] font-bold text-secondary mt-1 uppercase tracking-widest">Entrega prevista: {m.deliveryDate}</p>}
+                <p className="text-[10px] font-bold text-outline mt-1 tracking-widest">Levado por: {m.takenBy}</p>
+              </div>
+            </div>
+          ))}
+          {maintenances.length === 0 && (
+            <div className="text-center py-10 opacity-50">
+              <span className="material-symbols-outlined text-4xl mb-2">handyman</span>
+              <p className="font-bold text-sm">Nenhuma revisão registrada.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<'admin'|'monitor'>('admin');
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [exits, setExits] = useState<Exit[]>([]);
+  const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      if (u && u.email?.toLowerCase().includes('monitor')) {
+        setUserRole('monitor');
+      } else {
+        setUserRole('admin');
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -1075,31 +1337,21 @@ export default function App() {
       (err) => handleFirestoreError(err, OperationType.LIST, 'exits')
     );
 
+    const unsubMaintenances = onSnapshot(
+      query(collection(db, 'maintenances'), orderBy('date', 'desc')),
+      (snapshot) => {
+        setMaintenances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Maintenance)));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'maintenances')
+    );
+
     return () => {
       unsubProducts();
       unsubEntries();
       unsubExits();
+      unsubMaintenances();
     };
   }, [user]);
-
-  // Bootstrap initial products if empty
-  useEffect(() => {
-    if (user && products.length === 0 && !loading) {
-      const bootstrap = async () => {
-        const initialProducts = [
-          { name: 'Kit Pistão Forjado', sku: 'MTR-772-B', category: 'Peças', stock: 14, unitValue: 1250, imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7wHB0uT6w2O0jBsdLtsV96cSlttG4znrwhFYp2E77g0WygojWACqdS0ZWVh-vYv8G_HxEa-ry9oT5AXld4oWI-NxdL7HkNwjDnh62DnaZIeD6UqQqhwaArQatbqkrAxsIo7vKD-0XgN53mzCsNzU6qfSj9JJ0kadOFaDeGT8s4C6HzMW25irRttpLpqKAX5RbUBTl10RiB6oNmqCKdcW9X1jmIhEDn3s4nehe5xL0Mh4-CGwB3DbPZhThiaMQ7-NPIzUkZ835xTc' },
-          { name: 'Velas de Irídio', sku: 'SPK-01', category: 'Peças', stock: 42, unitValue: 85, imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCiCG2L1T_nBz-aJLNYFp2uFpHW7rLhcIC_14BuZIg99n_uNSTs8syxoZ5ObwYPLzGCgAwrll1_ywEqxvO5nT5eNudiUwFKpU-baCg1s1bfFBGYUsEOL0p0yNJjuvWmkegwDmhhKcsn6V31twILSPgVMgsQnl6L3_Lu-ri9hwtxtdVzrbupJ6dcjOt3vXntaXcRJrC_YGUxAkTH-e9rCahFTYHOrfAN2wMP_iQTN6q1jKFBgWCZes3yjNIfPUNj0ZEbbliHoCFlGVk' },
-          { name: 'Discos de Freio', sku: 'BRK-99', category: 'Peças', stock: 3, unitValue: 450, imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCUe4scvn_QEUhLzba1bssY4TH_4XJaF5hOqSfh9HGMnHQb-HVmiMLkZK5sxeU9YoED-UhQbJsN6XGUon9FqzwmvHhPaezCEXw_H9n-OXczvkSL4qUSFSBZ4I8tiHcNpBDWD12BxX4DPpJncEp5MGQQGBuMWRxJSt8ihPCZBNvIeDZon6ZL2l3kBX74iF61e-1HgjHawrlKOr654w7_ZDMQkmffeaNnxRO5st2kGLuuAPmT51aolY_b13zN0EK4xtb3cCSs_JrP2Tk' }
-        ];
-        
-        for (const p of initialProducts) {
-          await addDoc(collection(db, 'products'), p);
-        }
-      };
-      // Only bootstrap if we are sure it's empty and user is admin (or just for demo)
-      // bootstrap(); 
-    }
-  }, [user, products, loading]);
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginScreen />;
@@ -1112,15 +1364,25 @@ export default function App() {
           <main className="px-4 sm:px-6 lg:px-8 pt-4 pb-32 max-w-5xl mx-auto w-full transition-all">
             <AnimatePresence mode="wait">
               <Routes>
-                <Route path="/" element={<Dashboard products={products} entries={entries} exits={exits} />} />
-                <Route path="/entries" element={<EntriesPage products={products} user={user} />} />
-                <Route path="/exits" element={<ExitsPage products={products} user={user} />} />
-                <Route path="/inventory" element={<InventoryPage products={products} user={user} />} />
-                <Route path="*" element={<Navigate to="/" />} />
+                {userRole === 'monitor' ? (
+                  <>
+                    <Route path="/maintenances" element={<MaintenancesPage products={products} user={user} role={userRole} maintenances={maintenances} />} />
+                    <Route path="*" element={<Navigate to="/maintenances" />} />
+                  </>
+                ) : (
+                  <>
+                    <Route path="/" element={<Dashboard products={products} entries={entries} exits={exits} />} />
+                    <Route path="/entries" element={<EntriesPage products={products} user={user} />} />
+                    <Route path="/exits" element={<ExitsPage products={products} user={user} />} />
+                    <Route path="/inventory" element={<InventoryPage products={products} user={user} />} />
+                    <Route path="/maintenances" element={<MaintenancesPage products={products} user={user} role={userRole} maintenances={maintenances} />} />
+                    <Route path="*" element={<Navigate to="/" />} />
+                  </>
+                )}
               </Routes>
             </AnimatePresence>
           </main>
-          <Navbar user={user} />
+          <Navbar user={user} userRole={userRole} />
         </div>
       </Router>
     </ErrorBoundary>

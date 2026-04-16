@@ -41,3 +41,24 @@ export interface Exit {
   totalVolumes: number;
   authorUid: string;
 }
+
+export interface MaintenancePartRequested {
+  id: string;
+  name: string;
+  value: number;
+}
+
+export interface Maintenance {
+  id: string;
+  vehiclePlate: string;
+  vehicleModel: string;
+  date: string;
+  takenBy: string;
+  workshop: string;
+  mechanicName: string;
+  partsTaken: ExitItem[];
+  partsRequested: MaintenancePartRequested[];
+  deliveryDate: string;
+  observation: string;
+  authorUid: string;
+}
