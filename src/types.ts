@@ -53,6 +53,7 @@ export interface Maintenance {
   vehiclePlate: string;
   vehicleModel: string;
   date: string;
+  exitDate: string;
   takenBy: string;
   workshop: string;
   mechanicName: string;

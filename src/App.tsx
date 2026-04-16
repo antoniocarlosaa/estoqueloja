@@ -1045,6 +1045,7 @@ const MaintenancesPage = ({ products, user, role, maintenances }: { products: Pr
   const [takenBy, setTakenBy] = useState('');
   const [workshop, setWorkshop] = useState('');
   const [mechanicName, setMechanicName] = useState('');
+  const [exitDate, setExitDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [observation, setObservation] = useState('');
 
@@ -1102,7 +1103,7 @@ const MaintenancesPage = ({ products, user, role, maintenances }: { products: Pr
     setLoading(true);
     try {
       const maintenanceData = {
-        vehiclePlate, vehicleModel, date: new Date().toISOString(), takenBy, workshop, mechanicName,
+        vehiclePlate, vehicleModel, date: new Date().toISOString(), exitDate, takenBy, workshop, mechanicName,
         partsTaken: selectedStockParts, partsRequested: requestedParts, deliveryDate, observation, authorUid: user.uid
       };
       await addDoc(collection(db, 'maintenances'), maintenanceData);
@@ -1114,7 +1115,7 @@ const MaintenancesPage = ({ products, user, role, maintenances }: { products: Pr
         }
       }
       setVehiclePlate(''); setVehicleModel(''); setTakenBy(''); setWorkshop(''); setMechanicName(''); 
-      setDeliveryDate(''); setObservation(''); setSelectedStockParts([]); setRequestedParts([]);
+      setExitDate(''); setDeliveryDate(''); setObservation(''); setSelectedStockParts([]); setRequestedParts([]);
       alert('Revisão/Manutenção registrada com sucesso!');
       setView('list');
     } catch (error) {
@@ -1170,7 +1171,11 @@ const MaintenancesPage = ({ products, user, role, maintenances }: { products: Pr
                 <input type="text" value={mechanicName} onChange={e => setMechanicName(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Data de Entrega</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Data de Saída / Ida</label>
+                <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} required className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">Data de Entrega / Pronta</label>
                 <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className="w-full bg-surface-container-lowest border-none rounded-2xl py-3 px-4 text-on-surface font-bold" />
               </div>
               <div className="space-y-2 col-span-2">
@@ -1269,7 +1274,10 @@ const MaintenancesPage = ({ products, user, role, maintenances }: { products: Pr
               </div>
               <div className="pt-2">
                 {m.observation && <p className="text-xs text-on-surface-variant italic border-l-2 border-outline/30 pl-2">Obs: {m.observation}</p>}
-                {m.deliveryDate && <p className="text-[10px] font-bold text-secondary mt-1 uppercase tracking-widest">Entrega prevista: {m.deliveryDate}</p>}
+                <div className="flex gap-4 mt-2">
+                  {m.exitDate && <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Ida para Oficina: {m.exitDate.split('-').reverse().join('/')}</p>}
+                  {m.deliveryDate && <p className="text-[10px] font-bold text-secondary uppercase tracking-widest">Pronta / Entregue: {m.deliveryDate.split('-').reverse().join('/')}</p>}
+                </div>
                 <p className="text-[10px] font-bold text-outline mt-1 tracking-widest">Levado por: {m.takenBy}</p>
               </div>
             </div>
