@@ -177,23 +177,23 @@ const Navbar = ({ user, userRole }: { user: User, userRole: string }) => {
       ];
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#edf4ff]/80 backdrop-blur-xl border-t border-[#091d2e]/10 shadow-[0_-8px_24px_rgba(9,29,46,0.06)] z-50 rounded-t-3xl md:max-w-md md:left-1/2 md:-translate-x-1/2">
+    <nav className="fixed bottom-0 left-0 right-0 w-full flex justify-between items-center px-1 sm:px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-2 bg-[#edf4ff]/95 backdrop-blur-2xl border-t border-[#091d2e]/10 shadow-[0_-8px_30px_rgba(9,29,46,0.12)] z-[9999] rounded-t-3xl md:max-w-md md:left-1/2 md:-translate-x-1/2">
       {navItems.map((item) => {
         const isActive = location.pathname === item.path;
         return (
           <Link 
             key={item.path}
             to={item.path}
-            className={`flex flex-col items-center justify-center px-5 py-2 rounded-2xl transition-all duration-200 active:scale-90 ${
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 py-2 mx-0.5 rounded-2xl transition-all duration-200 active:scale-95 touch-manipulation ${
               isActive 
                 ? 'bg-[#d9eaff] text-[#004B87]' 
                 : 'text-[#424750] hover:text-[#004B87]'
             }`}
           >
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: `'FILL' ${isActive ? 1 : 0}` }}>
+            <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: `'FILL' ${isActive ? 1 : 0}` }}>
               {item.icon}
             </span>
-            <span className="text-[10px] font-bold tracking-wide uppercase mt-1">{item.label}</span>
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-tight uppercase mt-1 w-full text-center truncate px-0.5">{item.label}</span>
           </Link>
         );
       })}
@@ -339,9 +339,9 @@ const Dashboard = ({ products, entries, exits }: { products: Product[], entries:
               <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary">add_circle</span>
               </div>
-              <div className="flex-grow">
-                <h4 className="font-bold text-sm">{entry.productName}</h4>
-                <p className="text-on-surface-variant text-xs">+ {entry.quantity} unidades</p>
+              <div className="flex-grow min-w-0">
+                <h4 className="font-bold text-sm truncate">{entry.productName}</h4>
+                <p className="text-on-surface-variant text-xs truncate">+ {entry.quantity} unidades</p>
               </div>
               <div className="text-right">
                 <p className="text-secondary font-bold text-sm">Entrada</p>
@@ -693,9 +693,9 @@ const EntriesPage = ({ products, user, entries }: { products: Product[], user: U
               <h3 className="font-bold text-sm uppercase tracking-widest">Itens nesta Nota</h3>
               {items.map(item => (
                 <div key={item.id} className="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between border border-outline-variant/5">
-                  <div>
-                    <h4 className="font-bold text-sm">{item.displayName}</h4>
-                    <p className="text-xs text-on-surface-variant">{item.quantity} un x R$ {(item.unitValue || 0).toFixed(2)} | Total: R$ {item.totalValue.toFixed(2)}</p>
+                  <div className="min-w-0 flex-1 pr-2">
+                    <h4 className="font-bold text-sm truncate">{item.displayName}</h4>
+                    <p className="text-xs text-on-surface-variant truncate">{item.quantity} un x R$ {(item.unitValue || 0).toFixed(2)} | Total: R$ {item.totalValue.toFixed(2)}</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => handleEditItem(item.id)} className="p-2 text-primary hover:bg-primary/10 rounded-xl transition-colors">
@@ -776,9 +776,9 @@ const EntriesPage = ({ products, user, entries }: { products: Product[], user: U
           <div className="space-y-3">
             {groupedInvoices.singles.slice(0, 15).map((entry, idx) => (
               <div key={idx} className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 flex justify-between items-center shadow-sm">
-                 <div>
-                    <h4 className="font-bold text-sm text-on-surface">{entry.productName}</h4>
-                    <p className="text-[10px] text-on-surface-variant uppercase font-bold">{entry.quantity}x unidades • {entry.buyerName}</p>
+                 <div className="min-w-0 flex-1 pr-2">
+                    <h4 className="font-bold text-sm text-on-surface truncate">{entry.productName}</h4>
+                    <p className="text-[10px] text-on-surface-variant uppercase font-bold truncate">{entry.quantity}x unidades • {entry.buyerName}</p>
                  </div>
                  <div className="text-right">
                     <p className="text-xs font-black text-secondary">R$ {entry.totalValue.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
